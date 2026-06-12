@@ -529,7 +529,16 @@ function update(dt){
 const nearest=()=>{let b=null,bx=1e9;for(const g of gates){if(!g.resolved&&g.x<bx){bx=g.x;b=g;}}return b;};
 const DF='"Space Grotesk",sans-serif';
 const CNF='-apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+// 词牌上只显示干净释义:剥离 ·阳性! / -ung / (弱变化) 等会泄露词性的标注(复习页保留)
+const cleanGloss=g=>g.replace(/·.*$|\s+-[A-Za-zäöüß]+$|[（(].*$/,"").trim();
 function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function heart(x,y,s,filled,rot){ctx.save();ctx.translate(x,y);ctx.rotate(rot||0);ctx.scale(s,s);
+  ctx.beginPath();ctx.moveTo(0,0.42);
+  ctx.bezierCurveTo(-0.58,-0.06,-0.44,-0.64,-0.02,-0.32);
+  ctx.bezierCurveTo(0.42,-0.66,0.58,-0.08,0,0.42);ctx.closePath();
+  ctx.fillStyle=filled?"#AE5273":"#FBFAF5";ctx.fill();
+  ctx.lineWidth=1.8/s;ctx.lineJoin="round";
+  ctx.strokeStyle=filled?"#211E1A":hex("#211E1A",0.28);ctx.stroke();ctx.restore();}
 function hex(c,a){const n=parseInt(c.slice(1),16);return`rgba(${n>>16&255},${n>>8&255},${n&255},${a})`;}
 
 function draw(){
@@ -564,7 +573,7 @@ function draw(){
   for(const g of gates){
     const x=g.x,wy=44,d=g.word;   // 词牌悬在车道之外的中性顶区,不暗示任何词性
     ctx.font=`600 21px ${DF}`;const tw=ctx.measureText(d.word).width;
-    ctx.font=`11px ${CNF}`;const gw=ctx.measureText(d.gloss).width;
+    ctx.font=`11px ${CNF}`;const gl=cleanGloss(d.gloss),gw=ctx.measureText(gl).width;
     const pw=Math.max(tw,gw)+34,ph=58;
     // 引导竖线
     ctx.strokeStyle=g.resolved?hex(g.ok?COL[g.correct]:"#AE5273",0.4):hex("#211E1A",0.10);
@@ -580,7 +589,7 @@ function draw(){
     if(g.resolved){ctx.font=`600 12px ${DF}`;ctx.fillStyle=COL[g.correct];ctx.textAlign="center";
       ctx.fillText(d.art,x,wy+ph/2+17);}
     ctx.font=`600 21px ${DF}`;ctx.fillStyle="#211E1A";ctx.textAlign="center";ctx.fillText(d.word,x,wy);
-    ctx.font=`11px ${CNF}`;ctx.fillStyle=hex("#211E1A",0.55);ctx.fillText(d.gloss,x,wy+18);
+    ctx.font=`11px ${CNF}`;ctx.fillStyle=hex("#211E1A",0.55);ctx.fillText(gl,x,wy+18);
     // BLITZ窗口:金色流逝条(窗口内主动冲刺=BLITZ)
     if(!g.resolved&&g.vis!=null){const lf=(g.vis+g.bth-T)/g.bth;
       if(lf>0){ctx.fillStyle=hex(GOLD,0.9);rr(x-pw/2+8,wy+ph/2-5,(pw-16)*lf,2.5,1.25);ctx.fill();}}
@@ -671,10 +680,8 @@ function draw(){
     ctx.fillStyle=FEV;rr(-fw/2,-13,fw,26,13);ctx.fill();
     ctx.fillStyle="#FBFAF5";ctx.textAlign="center";ctx.fillText(ft,0,4.5);ctx.restore();}
 
-  // 冲刺模式:三颗心(左下,避开顶部词牌区)
-  if(mode==="rush"){ctx.font="15px sans-serif";ctx.textAlign="left";
-    for(let i=0;i<3;i++){ctx.fillStyle=i<rushHp?"#AE5273":hex("#211E1A",0.13);
-      ctx.fillText("♥",14+i*20,H-16);}}
+  // 冲刺模式:三颗手绘爱心(左下,墨线描边,微微歪斜)
+  if(mode==="rush")for(let i=0;i<3;i++)heart(22+i*24,H-20,9,i<rushHp,[-0.14,0.06,-0.05][i]);
 
   // 里程碑横幅:弹入 + 停留 + 淡出
   if(banners.length){const b=banners[0],t=b.t;
