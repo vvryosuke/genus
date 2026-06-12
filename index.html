@@ -308,6 +308,7 @@ let dino={lane:1,y:0,x:0,bonk:0,ring:0,squash:0};   // x:冲刺作答时短暂�
 let gates=[],stats={correct:0,total:0,combo:0,distF:0};
 let tapFx=null,zoneHi=0,zoneHiLane=1,startHint=4.5;   // 点击涟漪 / 区域高亮 / 起始提示
 let parts=[],floats=[],banners=[],freeze=0,comboPop=0; // 粒子 / 飘字 / 里程碑横幅 / 顿帧 / combo徽章弹跳
+let spawnDelay=0;   // 失误恢复拍:答错后下一词延迟出发
 let sprint=0;                                          // 冲刺:0→1,世界整体向左抽走的强度(恐龙是镜头锚点,不位移)
 let nextDistIdx=0;const DISTM=[100,250,500,1000,1500,2000,3000,5000,8000];
 const PRAISE=["不错!","厉害!","Sehr gut!","火力全开!","Wahnsinn!","无人能挡!"];
@@ -392,7 +393,8 @@ function resolve(g){
   round.total++;saveProg();
   const ce=document.getElementById("combo");ce.classList.remove("bump","bad");
   void ce.offsetWidth;ce.classList.add(right?"bump":"bad");
-  speak(d);updateHUD();spawnGate();
+  speak(d);updateHUD();
+  if(right)spawnGate();else spawnDelay=0.6;   // 失误恢复拍:看清揭晓再来下一词;答对保持冲刺节奏
   if(mode==="practice"&&round.total>=practiceN)setTimeout(endRound,700);   // 留0.7s看清最后一词的反馈
 }
 
@@ -509,6 +511,7 @@ function update(dt){
   const cg=gates.find(g=>g.claimed&&!g.resolved);
   if(cg){dino.x+=(cg.x-10-dino.x)*Math.min(1,dt*15);   // 冲向词牌
     if(cg.x-dino.x<18)resolve(cg);}                    // 接触=撞击结算
+  if(spawnDelay>0){spawnDelay-=dt;if(spawnDelay<=0)spawnGate();}   // 恢复拍结束,下一词出发
   gates=gates.filter(g=>g.x>-280);
   dino.y+=(laneYs[dino.lane]-dino.y)*Math.min(1,dt*14);
   if(!cg)dino.x+=(dinoX-dino.x)*Math.min(1,dt*10);   // 撞击后迅速退回原位
@@ -743,7 +746,7 @@ function begin(){
   // 整局重置(词汇掌握度保留并持久化,局内统计清零)
   gates.length=0;parts.length=0;floats.length=0;banners.length=0;
   stats={correct:0,total:0,combo:0,distF:0};round=newRound(1);
-  nextDistIdx=0;fever=false;freeze=0;roundOver=false;tapFx=null;
+  nextDistIdx=0;fever=false;freeze=0;roundOver=false;tapFx=null;spawnDelay=0;
   dino.lane=1;dino.y=laneYs[1];dino.x=dinoX;sprint=0;startHint=3.5;rushHp=3;
   spawnGate();running=true;paused=false;last=performance.now();requestAnimationFrame(loop);
 }
