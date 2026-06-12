@@ -89,8 +89,19 @@
   .chip.d3{color:var(--die);background:var(--die-t);}
   .overlay p{margin:6px 0 0;color:var(--ink2);font-size:.9rem;line-height:1.7;max-width:300px;}
   .overlay p b{color:var(--ink);font-weight:600;}
-  #startBtn{margin-top:22px;font-family:var(--disp);font-weight:600;border:none;background:var(--ink);color:#fff;
+  #startBtn,#nextBtn{margin-top:22px;font-family:var(--disp);font-weight:600;border:none;background:var(--ink);color:#fff;
     font-size:1rem;padding:15px 44px;border-radius:999px;cursor:pointer;letter-spacing:.02em;}
+
+  /* 轮结算 */
+  .sumgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px 30px;margin:16px 0 2px;}
+  .scell .n{font-family:var(--disp);font-weight:700;font-size:1.45rem;font-variant-numeric:tabular-nums;}
+  .scell .n.gold{color:#C9A227;}
+  .scell .l{font-size:.58rem;color:var(--ink2);letter-spacing:.12em;text-transform:uppercase;margin-top:3px;}
+  .wrongs{margin-top:14px;font-size:.84rem;line-height:2;max-height:140px;overflow-y:auto;}
+  .wrongs b{font-family:var(--disp);font-weight:600;}
+  .wrongs .ok{color:var(--das);font-size:.8rem;}
+  .mast{margin-top:12px;font-size:.68rem;color:var(--ink2);letter-spacing:.06em;}
+  .mast b{color:var(--ink);font-family:var(--disp);}
 </style>
 <style id="genus-fonts">
 @font-face{font-family:'Space Grotesk';font-style:normal;font-weight:400;font-display:swap;
@@ -155,6 +166,14 @@ unicode-range:U+0100-02AF,U+0304,U+0308,U+0329,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+
     <button id="startBtn">Los geht's</button>
   </div>
 
+  <div class="overlay" id="sumview" style="display:none">
+    <div class="big" id="sumTitle">第 1 轮完成</div>
+    <div class="sumgrid" id="sumGrid"></div>
+    <div class="wrongs" id="sumWrong"></div>
+    <div class="mast" id="sumMast"></div>
+    <button id="nextBtn">下一轮 →</button>
+  </div>
+
 <script>
 const WORDS=[
   ["der","Löffel","勺子"],["die","Gabel","叉子"],["das","Messer","刀"],["der","Tisch","桌子"],["der","Stuhl","椅子"],
@@ -199,6 +218,10 @@ let tapFx=null,zoneHi=0,zoneHiLane=1,startHint=4.5;   // 点击涟漪 / 区域�
 let parts=[],floats=[],banners=[],freeze=0,comboPop=0; // 粒子 / 飘字 / 里程碑横幅 / 顿帧 / combo徽章弹跳
 let nextDistIdx=0;const DISTM=[100,250,500,1000,1500,2000,3000,5000,8000];
 const PRAISE=["不错!","厉害!","Sehr gut!","火力全开!","Wahnsinn!","无人能挡!"];
+let T=0,roundOver=false,fever=false;          // 游戏时钟 / 轮结算中 / FEVER状态
+const ROUND_N=30,BLITZ_F=0.35,FEVER_AT=10,GOLD="#C9A227",FEV="#C77B3F";
+const newRound=n=>({n,total:0,right:0,blitz:0,maxCombo:0,newMast:0,wrong:[]});
+let round=newRound(1);
 
 function layout(){
   dinoX=W*0.26;groundY=H-20;
@@ -209,8 +232,11 @@ function layout(){
 const worldSpeed=()=>W*DIFF[diff].scroll;
 const gateSpeed=d=>(W-dinoX)/winSec(d);
 
-function spawnGate(){const d=pick();gates.push({x:W+24,word:d,spd:gateSpeed(d),correct:LANE[d.art],resolved:false,ok:false,flash:0});}
-const setLane=i=>{const n=Math.max(0,Math.min(2,i));if(n!==dino.lane){dino.lane=n;dino.squash=1;}};
+function spawnGate(){const d=pick(),c=LANE[d.art];
+  gates.push({x:W+24,word:d,spd:gateSpeed(d),correct:c,resolved:false,ok:false,flash:0,
+    born:T,win:winSec(d),commit:dino.lane===c?T:null});}   // commit=进入正确车道的时刻
+const setLane=i=>{const n=Math.max(0,Math.min(2,i));if(n!==dino.lane){dino.lane=n;dino.squash=1;
+  const g=nearest();if(g)g.commit=(n===g.correct)?T:null;}};
 
 function resolve(g){
   g.resolved=true;const d=g.word;d.seen++;const right=dino.lane===g.correct;
@@ -219,17 +245,50 @@ function resolve(g){
     freeze=0.05;comboPop=1;sfxRight(stats.combo);if(navigator.vibrate)navigator.vibrate(12);
     burst(dinoX+12,laneYs[g.correct],COL[g.correct],10+Math.min(stats.combo,14));
     floatTxt(dinoX+30,laneYs[g.correct]-36,"+1",COL[g.correct],13);
-    if(d.streak===4)floatTxt(dinoX,laneYs[g.correct]-58,"★ "+d.word+" 已掌握",COL[1],13);
-    if(stats.combo>=5&&stats.combo%5===0)
+    if(d.streak===4){floatTxt(dinoX,laneYs[g.correct]-58,"★ "+d.word+" 已掌握",COL[1],13);round.newMast++;}
+    // BLITZ:在窗口前35%内就已站对车道 = 秒答,奖励反应速度而非压线
+    if(g.commit!=null&&g.commit-g.born<=g.win*BLITZ_F){
+      round.blitz++;stats.distF+=5;
+      floatTxt(dinoX+34,laneYs[g.correct]-54,"BLITZ!",GOLD,15);
+      const f=880*Math.pow(2,Math.min(stats.combo,12)/12);tone(f,f*2,.12,"triangle",.13);}
+    if(!fever&&stats.combo>=FEVER_AT){fever=true;showBanner("FEVER ×2","双倍里程 · 保持连击!",FEV);}
+    if(stats.combo>=5&&stats.combo%5===0&&stats.combo!==FEVER_AT)
       showBanner("COMBO ×"+stats.combo,PRAISE[Math.min(PRAISE.length-1,stats.combo/5-1)],COL[g.correct]);
+    round.right++;round.maxCombo=Math.max(round.maxCombo,stats.combo);
   }else{stats.combo=0;d.streak=0;d.weight=Math.min(9,d.weight+3);dino.bonk=1;shake=1;
     freeze=0.12;sfxWrong();if(navigator.vibrate)navigator.vibrate([40,50,40]);
     floatTxt(dinoX+30,laneYs[g.correct],ART[g.correct]+"!",COL[g.correct],17);
+    if(fever){fever=false;floatTxt(W*0.5,H*0.42,"FEVER 结束","#8C8880",13);}
+    if(!round.wrong.some(w=>w.id===d.id))round.wrong.push({id:d.id,art:d.art,word:d.word,gloss:d.gloss});
   }
+  round.total++;
   const ce=document.getElementById("combo");ce.classList.remove("bump","bad");
   void ce.offsetWidth;ce.classList.add(right?"bump":"bad");
   speak(d);updateHUD();spawnGate();
+  if(round.total>=ROUND_N)setTimeout(endRound,700);   // 留0.7s看清最后一词的反馈
 }
+
+function endRound(){
+  if(roundOver)return;roundOver=true;paused=true;sfxMile();
+  document.getElementById("sumTitle").textContent="第 "+round.n+" 轮完成";
+  const acc=Math.round(round.right/round.total*100);
+  const cells=[[acc+"%","正确率",""],["×"+round.maxCombo,"最高连击",""],
+    [round.blitz,"Blitz 秒答","gold"],[round.newMast,"新掌握",""],
+    [Math.floor(stats.distF),"总里程",""],[Math.round(round.blitz/round.total*100)+"%","Blitz率","gold"]];
+  document.getElementById("sumGrid").innerHTML=cells.map(c=>
+    `<div class="scell"><div class="n ${c[2]}">${c[0]}</div><div class="l">${c[1]}</div></div>`).join("");
+  document.getElementById("sumWrong").innerHTML=round.wrong.length
+    ?"本轮错词:<br>"+round.wrong.map(w=>`<b style="color:${COL[LANE[w.art]]}">${w.art} ${w.word}</b> · ${w.gloss}`).join("<br>")
+    :`<span class="ok">本轮零失误 ✦ Fehlerfrei!</span>`;
+  const m=deck.filter(d=>mlvl(d)>=4).length;
+  document.getElementById("sumMast").innerHTML=`题库掌握进度 <b>${m} / ${deck.length}</b>`;
+  document.getElementById("sumview").style.display="flex";
+}
+document.getElementById("nextBtn").addEventListener("click",()=>{
+  round=newRound(round.n+1);roundOver=false;
+  document.getElementById("sumview").style.display="none";
+  paused=false;last=performance.now();requestAnimationFrame(loop);
+});
 function speak(d){if(!("speechSynthesis"in window))return;
   const u=new SpeechSynthesisUtterance(d.art+" "+d.word);u.lang="de-DE";u.rate=.92;
   const v=speechSynthesis.getVoices().find(v=>v.lang.startsWith("de"));if(v)u.voice=v;
@@ -256,7 +315,10 @@ function showBanner(txt,sub,c){banners.push({txt,sub,c,t:0});sfxMile();
 
 function update(dt){
   if(freeze>0){freeze=Math.max(0,freeze-dt);dt*=0.18;}   // 顿帧:命中瞬间世界短暂减速
-  const ws=worldSpeed();scroll=(scroll+ws*dt)%44;stats.distF+=ws*dt*0.10;
+  T+=dt;
+  const ws=worldSpeed();scroll=(scroll+ws*dt)%44;stats.distF+=ws*dt*0.10*(fever?2:1);
+  if(fever&&Math.random()<dt*16)parts.push({x:dinoX-16,y:dino.y-12+(Math.random()-.5)*22,
+    vx:-90-Math.random()*70,vy:(Math.random()-.5)*50,t:.7,c:Math.random()<.5?FEV:GOLD,r:2+Math.random()*2});
   if(nextDistIdx<DISTM.length&&stats.distF>=DISTM[nextDistIdx]){
     showBanner(DISTM[nextDistIdx]+" METER","里程碑达成",COL[0]);nextDistIdx++;}
   for(const g of gates){g.x-=g.spd*dt;if(!g.resolved&&g.x<=dinoX)resolve(g);if(g.flash>0)g.flash=Math.max(0,g.flash-dt*1.5);}
@@ -366,6 +428,15 @@ function draw(){
   // 答错:全屏淡红闪
   if(dino.bonk>0){ctx.fillStyle=hex("#C26B5E",0.10*dino.bonk);ctx.fillRect(0,0,W,H);}
 
+  // FEVER:暖色滤镜 + 顶部脉动徽章
+  if(fever){
+    ctx.fillStyle=hex(FEV,0.05+0.02*Math.sin(T*6));ctx.fillRect(0,0,W,H);
+    const s=1+0.05*Math.sin(T*8);
+    ctx.save();ctx.translate(W/2,26);ctx.scale(s,s);
+    ctx.font=`700 13px ${DF}`;const ft="FEVER ×2",fw=ctx.measureText(ft).width+22;
+    ctx.fillStyle=FEV;rr(-fw/2,-13,fw,26,13);ctx.fill();
+    ctx.fillStyle="#FBFAF5";ctx.textAlign="center";ctx.fillText(ft,0,4.5);ctx.restore();}
+
   // 里程碑横幅:弹入 + 停留 + 淡出
   if(banners.length){const b=banners[0],t=b.t;
     const ain=Math.min(1,t*5),aout=Math.min(1,(1.7-t)*2.5),a=Math.max(0,Math.min(ain,aout));
@@ -425,6 +496,7 @@ function begin(){
 }
 let paused=false;
 function setPause(p){
+  if(roundOver)return;   // 结算画面接管,由"下一轮"按钮恢复
   if(!running&&!paused)return;
   paused=p;
   document.getElementById("pausemask").classList.toggle("show",p);
