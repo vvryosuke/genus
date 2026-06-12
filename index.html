@@ -219,7 +219,7 @@ let parts=[],floats=[],banners=[],freeze=0,comboPop=0; // 粒子 / 飘字 / 里�
 let nextDistIdx=0;const DISTM=[100,250,500,1000,1500,2000,3000,5000,8000];
 const PRAISE=["不错!","厉害!","Sehr gut!","火力全开!","Wahnsinn!","无人能挡!"];
 let T=0,roundOver=false,fever=false;          // 游戏时钟 / 轮结算中 / FEVER状态
-const ROUND_N=30,BLITZ_F=0.35,FEVER_AT=10,GOLD="#C9A227",FEV="#C77B3F";
+const ROUND_N=30,FEVER_AT=10,GOLD="#C9A227",FEV="#C77B3F";
 const newRound=n=>({n,total:0,right:0,blitz:0,maxCombo:0,newMast:0,wrong:[]});
 let round=newRound(1);
 
@@ -233,8 +233,10 @@ const worldSpeed=()=>W*DIFF[diff].scroll;
 const gateSpeed=d=>(W-dinoX)/winSec(d);
 
 function spawnGate(){const d=pick(),c=LANE[d.art];
+  const w=winSec(d);
   gates.push({x:W+24,word:d,spd:gateSpeed(d),correct:c,resolved:false,ok:false,flash:0,
-    born:T,win:winSec(d),commit:dino.lane===c?T:null});}   // commit=进入正确车道的时刻
+    born:T,win:w,vis:null,bth:Math.min(0.9,w*0.55),   // vis=单词进入可读区时刻,bth=从那时起的BLITZ窗口
+    commit:dino.lane===c?T:null});}                    // commit=进入正确车道的时刻
 const setLane=i=>{const n=Math.max(0,Math.min(2,i));if(n!==dino.lane){dino.lane=n;dino.squash=1;
   const g=nearest();if(g)g.commit=(n===g.correct)?T:null;}};
 
@@ -246,8 +248,8 @@ function resolve(g){
     burst(dinoX+12,laneYs[g.correct],COL[g.correct],10+Math.min(stats.combo,14));
     floatTxt(dinoX+30,laneYs[g.correct]-36,"+1",COL[g.correct],13);
     if(d.streak===4){floatTxt(dinoX,laneYs[g.correct]-58,"★ "+d.word+" 已掌握",COL[1],13);round.newMast++;}
-    // BLITZ:在窗口前35%内就已站对车道 = 秒答,奖励反应速度而非压线
-    if(g.commit!=null&&g.commit-g.born<=g.win*BLITZ_F){
+    // BLITZ:单词可见后bth秒内已站对车道 = 秒答(提前站对的也算)
+    if(g.commit!=null&&g.commit<=(g.vis!=null?g.vis:g.born)+g.bth){
       round.blitz++;stats.distF+=5;
       floatTxt(dinoX+34,laneYs[g.correct]-54,"BLITZ!",GOLD,15);
       const f=880*Math.pow(2,Math.min(stats.combo,12)/12);tone(f,f*2,.12,"triangle",.13);}
@@ -321,7 +323,9 @@ function update(dt){
     vx:-90-Math.random()*70,vy:(Math.random()-.5)*50,t:.7,c:Math.random()<.5?FEV:GOLD,r:2+Math.random()*2});
   if(nextDistIdx<DISTM.length&&stats.distF>=DISTM[nextDistIdx]){
     showBanner(DISTM[nextDistIdx]+" METER","里程碑达成",COL[0]);nextDistIdx++;}
-  for(const g of gates){g.x-=g.spd*dt;if(!g.resolved&&g.x<=dinoX)resolve(g);if(g.flash>0)g.flash=Math.max(0,g.flash-dt*1.5);}
+  for(const g of gates){g.x-=g.spd*dt;
+    if(!g.resolved&&g.vis==null&&g.x<W-56)g.vis=T;   // 单词滑入可读区,BLITZ计时从此刻起
+    if(!g.resolved&&g.x<=dinoX)resolve(g);if(g.flash>0)g.flash=Math.max(0,g.flash-dt*1.5);}
   gates=gates.filter(g=>g.x>-280);
   dino.y+=(laneYs[dino.lane]-dino.y)*Math.min(1,dt*14);
   if(dino.bonk>0)dino.bonk=Math.max(0,dino.bonk-dt*2.2);
@@ -388,11 +392,15 @@ function draw(){
       ctx.fillText(d.art,x,wy-ph/2-22);}
     ctx.font=`600 21px ${DF}`;ctx.fillStyle="#211E1A";ctx.textAlign="center";ctx.fillText(d.word,x,wy);
     ctx.font=`11px ${CNF}`;ctx.fillStyle=hex("#211E1A",0.55);ctx.fillText(d.gloss,x,wy+18);
+    // BLITZ窗口:金色流逝条(可见后bth秒内答对=秒答)
+    if(!g.resolved&&g.vis!=null){const lf=(g.vis+g.bth-T)/g.bth;
+      if(lf>0){ctx.fillStyle=hex(GOLD,0.9);rr(x-pw/2+8,wy+ph/2-5,(pw-16)*lf,2.5,1.25);ctx.fill();}}
   }
 
   // 恐龙 + 影子
   const dx=dinoX,dy=dino.y;
-  ctx.fillStyle=hex("#211E1A",0.07);ctx.beginPath();ctx.ellipse(dx,dy+10,16,4,0,0,7);ctx.fill();
+  const ph2=scroll/44*Math.PI*2,lp=Math.sin(ph2),bob=Math.abs(Math.cos(ph2))*2.4; // 跑步相位/摆腿/起伏
+  ctx.fillStyle=hex("#211E1A",0.07);ctx.beginPath();ctx.ellipse(dx,dy+10,16-bob*1.2,4,0,0,7);ctx.fill();
   if(dino.ring>0){ctx.strokeStyle=COL[dino.lane];ctx.globalAlpha=dino.ring;ctx.lineWidth=2.5;
     ctx.beginPath();ctx.arc(dx,dy-13,28+(1-dino.ring)*16,0,7);ctx.stroke();ctx.globalAlpha=1;}
   if(stats.combo>=3){ctx.strokeStyle=hex(COL[dino.lane],0.3);ctx.lineWidth=2;
@@ -401,13 +409,39 @@ function draw(){
     ctx.font=`700 13px ${DF}`;const ct="×"+stats.combo,cw=ctx.measureText(ct).width+14;
     ctx.fillStyle=hex(COL[dino.lane],0.95);rr(-cw/2,-11,cw,22,11);ctx.fill();
     ctx.fillStyle="#FBFAF5";ctx.textAlign="center";ctx.fillText(ct,0,4);ctx.restore();}
-  ctx.save();ctx.translate(dx,dy);ctx.scale(1+0.15*dino.squash,1-0.18*dino.squash);
-  ctx.rotate(dino.bonk>0?-0.28*dino.bonk:0);
-  ctx.fillStyle=stats.combo>=3?COL[dino.lane]:"#211E1A";rr(-15,-40,30,40,12);ctx.fill();
-  ctx.fillStyle="#FBFAF5";ctx.beginPath();ctx.arc(7,-27,3.2,0,7);ctx.fill();
-  const lp=Math.sin(scroll/44*Math.PI*2);ctx.strokeStyle="#211E1A";ctx.lineWidth=4;ctx.lineCap="round";
-  ctx.beginPath();ctx.moveTo(-6,0);ctx.lineTo(-6+lp*6,9);ctx.stroke();
-  ctx.beginPath();ctx.moveTo(6,0);ctx.lineTo(6-lp*6,9);ctx.stroke();ctx.restore();
+  const ink=stats.combo>=3?COL[dino.lane]:"#211E1A";
+  ctx.save();ctx.translate(dx,dy-bob);ctx.scale(1+0.15*dino.squash,1-0.18*dino.squash);
+  ctx.rotate(dino.bonk>0?-0.28*dino.bonk:0.03*lp);   // 答错后仰 / 奔跑轻摆
+  ctx.fillStyle=ink;
+  // 尾巴(低位细尾,随步伐轻摆)
+  ctx.beginPath();ctx.moveTo(-13,-20);
+  ctx.quadraticCurveTo(-24,-17+lp*2,-30,-9+lp*3);
+  ctx.quadraticCurveTo(-22,-8,-13,-10);ctx.closePath();ctx.fill();
+  // 背鳍(贴背两枚小三角)
+  for(let s=0;s<2;s++){const bx=-11+s*6,by=-33-s;
+    ctx.beginPath();ctx.moveTo(bx,by+3);ctx.lineTo(bx-3,by-5);ctx.lineTo(bx+4,by+2);ctx.closePath();ctx.fill();}
+  // 身体 + 头(吻部朝右)
+  rr(-15,-34,26,33,11);ctx.fill();
+  rr(-6,-52,26,20,9);ctx.fill();
+  // 眼睛(偶尔眨) + 嘴缝 + 鼻孔
+  if(Math.sin(T*1.7)>0.97){ctx.strokeStyle="#FBFAF5";ctx.lineWidth=1.6;
+    ctx.beginPath();ctx.moveTo(7,-44);ctx.lineTo(13,-44);ctx.stroke();}
+  else{ctx.fillStyle="#FBFAF5";ctx.beginPath();ctx.arc(10,-44,3,0,7);ctx.fill();}
+  ctx.strokeStyle="#FBFAF5";ctx.lineWidth=1.2;
+  ctx.beginPath();ctx.moveTo(20,-38);ctx.lineTo(13,-38);ctx.stroke();
+  ctx.fillStyle="#FBFAF5";ctx.beginPath();ctx.arc(17.5,-41.5,0.9,0,7);ctx.fill();
+  // 小手臂
+  ctx.strokeStyle=ink;ctx.lineWidth=3;ctx.lineCap="round";
+  ctx.beginPath();ctx.moveTo(7,-24);ctx.quadraticCurveTo(12,-22,13,-19+lp);ctx.stroke();
+  // 双腿:屈膝交替跑
+  ctx.lineWidth=4;
+  ctx.beginPath();ctx.moveTo(1,-6);ctx.quadraticCurveTo(6+lp*3,0,3+lp*7,9);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(-8,-6);ctx.quadraticCurveTo(-3-lp*3,0,-6-lp*7,9);ctx.stroke();
+  // 小脚掌
+  ctx.lineWidth=3;
+  ctx.beginPath();ctx.moveTo(3+lp*7,9);ctx.lineTo(7+lp*7,9);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(-6-lp*7,9);ctx.lineTo(-2-lp*7,9);ctx.stroke();
+  ctx.restore();
   ctx.restore();
 
   // 点击涟漪反馈
