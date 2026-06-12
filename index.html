@@ -29,6 +29,10 @@
   .stat:first-child{border-left:none;}
   .stat .num{font-family:var(--disp);font-weight:600;font-size:1.2rem;font-variant-numeric:tabular-nums;line-height:1;}
   .stat .lab{font-size:.56rem;letter-spacing:.14em;color:var(--ink2);text-transform:uppercase;margin-top:4px;}
+  .stat .num.bump{animation:bump .32s ease;}
+  @keyframes bump{0%{transform:scale(1)}35%{transform:scale(1.5);color:var(--das)}100%{transform:scale(1)}}
+  .stat .num.bad{animation:badshake .34s ease;}
+  @keyframes badshake{0%{transform:translateX(0);color:#C26B5E}30%{transform:translateX(-3px)}60%{transform:translateX(3px);color:#C26B5E}100%{transform:translateX(0)}}
   .pause{margin-left:13px;align-self:center;width:34px;height:34px;border:1px solid var(--line);border-radius:10px;
     background:#fff;color:var(--ink);font-size:.7rem;line-height:1;cursor:pointer;letter-spacing:1px;
     display:flex;align-items:center;justify-content:center;transition:background .15s;}
@@ -189,9 +193,12 @@ window.addEventListener("resize",resize);
 
 let running=false,last=0,scroll=0,shake=0;
 let dinoX,laneYs,laneGap,groundY;
-let dino={lane:1,y:0,bonk:0,ring:0};
+let dino={lane:1,y:0,bonk:0,ring:0,squash:0};
 let gates=[],stats={correct:0,total:0,combo:0,distF:0};
 let tapFx=null,zoneHi=0,zoneHiLane=1,startHint=4.5;   // 点击涟漪 / 区域高亮 / 起始提示
+let parts=[],floats=[],banners=[],freeze=0,comboPop=0; // 粒子 / 飘字 / 里程碑横幅 / 顿帧 / combo徽章弹跳
+let nextDistIdx=0;const DISTM=[100,250,500,1000,1500,2000,3000,5000,8000];
+const PRAISE=["不错!","厉害!","Sehr gut!","火力全开!","Wahnsinn!","无人能挡!"];
 
 function layout(){
   dinoX=W*0.26;groundY=H-20;
@@ -203,13 +210,24 @@ const worldSpeed=()=>W*DIFF[diff].scroll;
 const gateSpeed=d=>(W-dinoX)/winSec(d);
 
 function spawnGate(){const d=pick();gates.push({x:W+24,word:d,spd:gateSpeed(d),correct:LANE[d.art],resolved:false,ok:false,flash:0});}
-const setLane=i=>dino.lane=Math.max(0,Math.min(2,i));
+const setLane=i=>{const n=Math.max(0,Math.min(2,i));if(n!==dino.lane){dino.lane=n;dino.squash=1;}};
 
 function resolve(g){
   g.resolved=true;const d=g.word;d.seen++;const right=dino.lane===g.correct;
   g.ok=right;g.flash=1;stats.total++;
-  if(right){stats.correct++;stats.combo++;d.correct++;d.streak++;d.weight=Math.max(1,d.weight-1);dino.ring=1;}
-  else{stats.combo=0;d.streak=0;d.weight=Math.min(9,d.weight+3);dino.bonk=1;shake=1;}
+  if(right){stats.correct++;stats.combo++;d.correct++;d.streak++;d.weight=Math.max(1,d.weight-1);dino.ring=1;
+    freeze=0.05;comboPop=1;sfxRight(stats.combo);if(navigator.vibrate)navigator.vibrate(12);
+    burst(dinoX+12,laneYs[g.correct],COL[g.correct],10+Math.min(stats.combo,14));
+    floatTxt(dinoX+30,laneYs[g.correct]-36,"+1",COL[g.correct],13);
+    if(d.streak===4)floatTxt(dinoX,laneYs[g.correct]-58,"★ "+d.word+" 已掌握",COL[1],13);
+    if(stats.combo>=5&&stats.combo%5===0)
+      showBanner("COMBO ×"+stats.combo,PRAISE[Math.min(PRAISE.length-1,stats.combo/5-1)],COL[g.correct]);
+  }else{stats.combo=0;d.streak=0;d.weight=Math.min(9,d.weight+3);dino.bonk=1;shake=1;
+    freeze=0.12;sfxWrong();if(navigator.vibrate)navigator.vibrate([40,50,40]);
+    floatTxt(dinoX+30,laneYs[g.correct],ART[g.correct]+"!",COL[g.correct],17);
+  }
+  const ce=document.getElementById("combo");ce.classList.remove("bump","bad");
+  void ce.offsetWidth;ce.classList.add(right?"bump":"bad");
   speak(d);updateHUD();spawnGate();
 }
 function speak(d){if(!("speechSynthesis"in window))return;
@@ -217,8 +235,30 @@ function speak(d){if(!("speechSynthesis"in window))return;
   const v=speechSynthesis.getVoices().find(v=>v.lang.startsWith("de"));if(v)u.voice=v;
   speechSynthesis.cancel();speechSynthesis.speak(u);}
 
+/* 音效:答对音高随combo上升,答错低沉,里程碑小号角 */
+let AC=null;
+function sfx(fn){try{if(!AC)AC=new(window.AudioContext||window.webkitAudioContext)();
+  if(AC.state==="suspended")AC.resume();fn(AC);}catch(e){}}
+function tone(f0,f1,dur,type,vol,when=0){sfx(a=>{const o=a.createOscillator(),g=a.createGain(),t=a.currentTime+when;
+  o.type=type;o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(Math.max(30,f1),t+dur);
+  g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+dur+.02);});}
+const sfxRight=c=>{const f=520*Math.pow(2,Math.min(c,12)/12);tone(f,f*1.5,.11,"triangle",.14);};
+const sfxWrong=()=>tone(170,60,.22,"sawtooth",.15);
+const sfxMile=()=>[0,4,7,12].forEach((s,i)=>{const f=660*Math.pow(2,s/12);tone(f,f,.13,"triangle",.11,i*.07);});
+
+/* 粒子 / 飘字 / 里程碑横幅 */
+function burst(x,y,c,n=14,pow=1){for(let i=0;i<n;i++){const a=Math.random()*6.28,s=(70+Math.random()*170)*pow;
+  parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-50*pow,t:1,c,r:2+Math.random()*2.5});}}
+function floatTxt(x,y,txt,c,size=14){floats.push({x,y,txt,c,size,t:1});}
+function showBanner(txt,sub,c){banners.push({txt,sub,c,t:0});sfxMile();
+  burst(W*0.5,H*0.30,c,26,1.4);if(navigator.vibrate)navigator.vibrate([20,30,20]);}
+
 function update(dt){
+  if(freeze>0){freeze=Math.max(0,freeze-dt);dt*=0.18;}   // 顿帧:命中瞬间世界短暂减速
   const ws=worldSpeed();scroll=(scroll+ws*dt)%44;stats.distF+=ws*dt*0.10;
+  if(nextDistIdx<DISTM.length&&stats.distF>=DISTM[nextDistIdx]){
+    showBanner(DISTM[nextDistIdx]+" METER","里程碑达成",COL[0]);nextDistIdx++;}
   for(const g of gates){g.x-=g.spd*dt;if(!g.resolved&&g.x<=dinoX)resolve(g);if(g.flash>0)g.flash=Math.max(0,g.flash-dt*1.5);}
   gates=gates.filter(g=>g.x>-280);
   dino.y+=(laneYs[dino.lane]-dino.y)*Math.min(1,dt*14);
@@ -228,9 +268,17 @@ function update(dt){
   if(zoneHi>0)zoneHi=Math.max(0,zoneHi-dt*3);
   if(startHint>0)startHint=Math.max(0,startHint-dt);
   if(tapFx){tapFx.t-=dt*2.6;if(tapFx.t<=0)tapFx=null;}
+  if(comboPop>0)comboPop=Math.max(0,comboPop-dt*3);
+  if(dino.squash>0)dino.squash=Math.max(0,dino.squash-dt*5);
+  for(const p of parts){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=420*dt;p.t-=dt*1.5;}
+  parts=parts.filter(p=>p.t>0);
+  for(const f of floats){f.y-=30*dt;f.t-=dt*1.1;}
+  floats=floats.filter(f=>f.t>0);
+  if(banners.length){banners[0].t+=dt;if(banners[0].t>1.7)banners.shift();}
 }
 const nearest=()=>{let b=null,bx=1e9;for(const g of gates){if(!g.resolved&&g.x<bx){bx=g.x;b=g;}}return b;};
 const DF='"Space Grotesk",sans-serif';
+const CNF='-apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
 function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
 function hex(c,a){const n=parseInt(c.slice(1),16);return`rgba(${n>>16&255},${n>>8&255},${n&255},${a})`;}
 
@@ -261,7 +309,8 @@ function draw(){
   for(const g of gates){
     const x=g.x,wy=laneYs[1],d=g.word;
     ctx.font=`600 21px ${DF}`;const tw=ctx.measureText(d.word).width;
-    const pw=tw+34,ph=42;
+    ctx.font=`11px ${CNF}`;const gw=ctx.measureText(d.gloss).width;
+    const pw=Math.max(tw,gw)+34,ph=58;
     // 引导竖线
     ctx.strokeStyle=g.resolved?hex(g.ok?COL[g.correct]:"#AE5273",0.4):hex("#211E1A",0.10);
     ctx.lineWidth=1;ctx.setLineDash([3,6]);
@@ -274,8 +323,9 @@ function draw(){
     ctx.lineWidth=1.5;ctx.strokeStyle=g.resolved?(g.ok?COL[g.correct]:"#C26B5E"):"#E3E0D7";
     rr(x-pw/2,wy-ph/2,pw,ph,13);ctx.stroke();
     if(g.resolved){ctx.font=`600 12px ${DF}`;ctx.fillStyle=COL[g.correct];ctx.textAlign="center";
-      ctx.fillText(g.art,x,wy-ph/2-22);}
-    ctx.font=`600 21px ${DF}`;ctx.fillStyle="#211E1A";ctx.textAlign="center";ctx.fillText(d.word,x,wy+7);
+      ctx.fillText(d.art,x,wy-ph/2-22);}
+    ctx.font=`600 21px ${DF}`;ctx.fillStyle="#211E1A";ctx.textAlign="center";ctx.fillText(d.word,x,wy);
+    ctx.font=`11px ${CNF}`;ctx.fillStyle=hex("#211E1A",0.55);ctx.fillText(d.gloss,x,wy+18);
   }
 
   // 恐龙 + 影子
@@ -285,7 +335,12 @@ function draw(){
     ctx.beginPath();ctx.arc(dx,dy-13,28+(1-dino.ring)*16,0,7);ctx.stroke();ctx.globalAlpha=1;}
   if(stats.combo>=3){ctx.strokeStyle=hex(COL[dino.lane],0.3);ctx.lineWidth=2;
     for(let s=0;s<3;s++){const ox=-22-s*9;ctx.beginPath();ctx.moveTo(dx+ox,dy-22+s*7);ctx.lineTo(dx+ox-9,dy-22+s*7);ctx.stroke();}}
-  ctx.save();ctx.translate(dx,dy);ctx.rotate(dino.bonk>0?-0.28*dino.bonk:0);
+  if(stats.combo>=2){const s=1+0.5*comboPop;ctx.save();ctx.translate(dx,dy-58);ctx.scale(s,s);
+    ctx.font=`700 13px ${DF}`;const ct="×"+stats.combo,cw=ctx.measureText(ct).width+14;
+    ctx.fillStyle=hex(COL[dino.lane],0.95);rr(-cw/2,-11,cw,22,11);ctx.fill();
+    ctx.fillStyle="#FBFAF5";ctx.textAlign="center";ctx.fillText(ct,0,4);ctx.restore();}
+  ctx.save();ctx.translate(dx,dy);ctx.scale(1+0.15*dino.squash,1-0.18*dino.squash);
+  ctx.rotate(dino.bonk>0?-0.28*dino.bonk:0);
   ctx.fillStyle=stats.combo>=3?COL[dino.lane]:"#211E1A";rr(-15,-40,30,40,12);ctx.fill();
   ctx.fillStyle="#FBFAF5";ctx.beginPath();ctx.arc(7,-27,3.2,0,7);ctx.fill();
   const lp=Math.sin(scroll/44*Math.PI*2);ctx.strokeStyle="#211E1A";ctx.lineWidth=4;ctx.lineCap="round";
@@ -296,6 +351,29 @@ function draw(){
   // 点击涟漪反馈
   if(tapFx){const a=Math.max(0,tapFx.t);ctx.strokeStyle=hex(COL[tapFx.lane],0.5*a);ctx.lineWidth=2;
     ctx.beginPath();ctx.arc(tapFx.x,tapFx.y,14+(1-a)*26,0,7);ctx.stroke();}
+
+  // 彩屑粒子
+  for(const p of parts){ctx.globalAlpha=Math.max(0,p.t);ctx.fillStyle=p.c;
+    ctx.fillRect(p.x-p.r/2,p.y-p.r/2,p.r,p.r);}
+  ctx.globalAlpha=1;
+
+  // 飘字
+  for(const f of floats){ctx.globalAlpha=Math.max(0,Math.min(1,f.t*1.4));
+    ctx.font=`700 ${f.size}px ${DF}`;ctx.textAlign="center";ctx.fillStyle=f.c;
+    ctx.fillText(f.txt,f.x,f.y);}
+  ctx.globalAlpha=1;
+
+  // 答错:全屏淡红闪
+  if(dino.bonk>0){ctx.fillStyle=hex("#C26B5E",0.10*dino.bonk);ctx.fillRect(0,0,W,H);}
+
+  // 里程碑横幅:弹入 + 停留 + 淡出
+  if(banners.length){const b=banners[0],t=b.t;
+    const ain=Math.min(1,t*5),aout=Math.min(1,(1.7-t)*2.5),a=Math.max(0,Math.min(ain,aout));
+    const s=1+(1-ain)*0.6;
+    ctx.save();ctx.globalAlpha=a;ctx.translate(W/2,H*0.30);ctx.scale(s,s);
+    ctx.font=`700 30px ${DF}`;ctx.textAlign="center";ctx.fillStyle=b.c;ctx.fillText(b.txt,0,0);
+    ctx.font=`12px ${CNF}`;ctx.fillStyle=hex("#211E1A",0.6);ctx.fillText(b.sub,0,24);
+    ctx.restore();}
 
   // 起始几秒:淡淡标出三个可点区域
   if(startHint>0){const a=Math.min(1,startHint/1.5)*0.9;
@@ -341,6 +419,7 @@ cv.addEventListener("pointerdown",e=>{tapAt(e.clientX,e.clientY);},{passive:true
 
 function begin(){
   document.getElementById("overlay").style.display="none";resize();
+  sfx(()=>{});  // 在用户手势内创建/恢复AudioContext(iOS要求)
   if("speechSynthesis"in window)speechSynthesis.speak(new SpeechSynthesisUtterance(""));
   spawnGate();running=true;last=performance.now();requestAnimationFrame(loop);
 }
