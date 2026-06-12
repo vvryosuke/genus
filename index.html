@@ -122,6 +122,7 @@
   .recrow:last-child{border-bottom:none;}
   .recrow b{font-family:var(--disp);font-weight:600;min-width:104px;}
   .recrow .g{color:var(--ink2);flex:1;font-size:.74rem;}
+  .recrow .lv{font-size:.58rem;color:var(--ink2);border:1px solid var(--line);padding:1px 4px;border-radius:5px;letter-spacing:.05em;}
   .recrow .m{display:flex;gap:2px;}
   .recrow .m i{width:7px;height:3px;border-radius:2px;background:var(--line);}
   .recrow .m i.f{background:var(--das);}
@@ -182,7 +183,7 @@ unicode-range:U+0100-02AF,U+0304,U+0308,U+0329,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+
     <button class="key das" data-l="1"><span class="a">das</span><span class="dir">→ Spur 2</span><span class="g">中性</span></button>
     <button class="key die" data-l="2"><span class="a">die</span><span class="dir">↓ Spur 3</span><span class="g">阴性</span></button>
   </div>
-  <div class="foot">每个词点一次车道作答(同道也要点) · 不作答 = 错 · 牌上短条 = 掌握度</div>
+  <div class="foot">点对车道 = 立刻冲刺结算(金条内首点即对 = BLITZ) · 点错可在到线前改答 · 不点 = 按所在车道结算</div>
 
   <div class="overlay" id="homeview">
     <div class="big">der · die<br>das</div>
@@ -197,7 +198,7 @@ unicode-range:U+0100-02AF,U+0304,U+0308,U+0329,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+
 
   <div class="overlay" id="setupview" style="display:none">
     <div class="big" id="setupTitle">无限模式</div>
-    <p>单词从右边来。<b>每个词点一次</b>对应词性车道,<br>恐龙会冲上去作答——<b>不作答也算错</b>。<br>答得快有 BLITZ,熟练的词会越来越快。</p>
+    <p>单词从右边来。<b>点对车道</b>恐龙立刻冲刺结算,<br>趁金条未尽一次点对就是 <b>BLITZ</b>;<br>点错还能改,词到线前选对即可。</p>
     <div class="seg" id="spdSeg" style="margin-top:18px;">
       <button data-d="slow" class="on">慢</button><button data-d="fast">快</button><button data-d="crazy">疯狂</button>
     </div>
@@ -231,21 +232,56 @@ unicode-range:U+0100-02AF,U+0304,U+0308,U+0329,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+
 
 <script>
 const WORDS=[
-  ["der","Löffel","勺子"],["die","Gabel","叉子"],["das","Messer","刀"],["der","Tisch","桌子"],["der","Stuhl","椅子"],
-  ["das","Fenster","窗户"],["die","Tür","门"],["die","Lampe","灯"],["das","Buch","书"],["der","Mann","男人"],
-  ["die","Frau","女人"],["das","Kind","孩子"],["der","Junge","男孩"],["das","Mädchen","女孩 -chen"],["der","Lehrer","老师 -er"],
-  ["die","Zeitung","报纸 -ung"],["die","Freiheit","自由 -heit"],["die","Möglichkeit","可能性 -keit"],["die","Freundschaft","友谊 -schaft"],["das","Brötchen","小面包 -chen"],
-  ["die","Blume","花"],["die","Sonne","太阳"],["die","Katze","猫"],["die","Sprache","语言"],["die","Straße","街道"],
-  ["der","Mond","月亮·阳性!"],["das","Wasser","水"],["das","Feuer","火"],["die","Luft","空气"],["die","Erde","大地"],
-  ["der","Baum","树"],["das","Blatt","叶子"],["das","Auto","汽车"],["der","Zug","火车"],["das","Flugzeug","飞机"],
-  ["der","Weg","路"],["die","Stadt","城市"],["das","Land","国家"],["der","Hund","狗"],["das","Pferd","马"],
-  ["der","Vogel","鸟"],["der","Fisch","鱼"],["die","Hand","手"],["der","Kopf","头"],["das","Auge","眼睛"],
-  ["das","Ohr","耳朵"],["der","Fuß","脚"],["die","Nase","鼻子"],["der","Arm","胳膊"],["das","Bein","腿"],
-  ["die","Zeit","时间"],["das","Jahr","年"],["der","Tag","天"],["die","Nacht","夜晚"],["der","Monat","月"],
-  ["die","Liebe","爱"],["das","Wort","词"],["der","Computer","电脑"],["die","Wolke","云"],
+  // —— A1 基础 ——
+  ["der","Löffel","勺子","a1"],["die","Gabel","叉子","a1"],["das","Messer","刀","a1"],["der","Tisch","桌子","a1"],["der","Stuhl","椅子","a1"],
+  ["das","Fenster","窗户","a1"],["die","Tür","门","a1"],["die","Lampe","灯","a1"],["das","Buch","书","a1"],["der","Mann","男人","a1"],
+  ["die","Frau","女人","a1"],["das","Kind","孩子","a1"],["der","Junge","男孩","a1"],["das","Mädchen","女孩 -chen","a1"],["der","Lehrer","老师 -er","a1"],
+  ["die","Zeitung","报纸 -ung","a1"],["das","Brötchen","小面包 -chen","a1"],
+  ["die","Blume","花","a1"],["die","Sonne","太阳","a1"],["die","Katze","猫","a1"],["die","Sprache","语言","a1"],["die","Straße","街道","a1"],
+  ["der","Mond","月亮·阳性!","a1"],["das","Wasser","水","a1"],
+  ["der","Baum","树","a1"],["das","Auto","汽车","a1"],["der","Zug","火车","a1"],["das","Flugzeug","飞机","a1"],
+  ["der","Weg","路","a1"],["die","Stadt","城市","a1"],["das","Land","国家","a1"],["der","Hund","狗","a1"],["das","Pferd","马","a1"],
+  ["der","Vogel","鸟","a1"],["der","Fisch","鱼","a1"],["die","Hand","手","a1"],["der","Kopf","头","a1"],["das","Auge","眼睛","a1"],
+  ["das","Ohr","耳朵","a1"],["der","Fuß","脚","a1"],["die","Nase","鼻子","a1"],["der","Arm","胳膊","a1"],["das","Bein","腿","a1"],
+  ["die","Zeit","时间","a1"],["das","Jahr","年","a1"],["der","Tag","天","a1"],["die","Nacht","夜晚","a1"],["der","Monat","月","a1"],
+  ["das","Wort","词","a1"],["der","Computer","电脑","a1"],
+  // —— A1 饮食 ——
+  ["der","Apfel","苹果","a1"],["das","Brot","面包","a1"],["die","Milch","牛奶","a1"],["der","Käse","奶酪","a1"],["das","Ei","鸡蛋","a1"],
+  ["der","Kaffee","咖啡","a1"],["der","Tee","茶","a1"],["das","Bier","啤酒","a1"],["der","Wein","葡萄酒","a1"],["der","Saft","果汁","a1"],
+  ["der","Zucker","糖","a1"],["das","Salz","盐","a1"],["die","Butter","黄油","a1"],["der","Reis","米饭","a1"],["das","Fleisch","肉","a1"],
+  ["das","Obst","水果","a1"],["das","Gemüse","蔬菜","a1"],
+  // —— A1 学习与工作 ——
+  ["die","Schule","学校","a1"],["der","Schüler","中小学生 -er","a1"],["die","Universität","大学 -tät","a1"],["der","Student","大学生(弱变化)","a1"],
+  ["die","Arbeit","工作","a1"],["der","Beruf","职业","a1"],["der","Arzt","医生","a1"],
+  ["die","Frage","问题","a1"],["die","Antwort","回答","a1"],["das","Beispiel","例子","a1"],
+  // —— A1 居住 ——
+  ["das","Haus","房子","a1"],["die","Wohnung","公寓 -ung","a1"],["das","Zimmer","房间","a1"],["die","Küche","厨房","a1"],["das","Bett","床","a1"],
+  ["der","Schlüssel","钥匙","a1"],["die","Tasche","包","a1"],["das","Geld","钱","a1"],["der","Preis","价格","a1"],
+  ["das","Geschäft","商店","a1"],["der","Markt","市场","a1"],
+  // —— A1 出行与天气 ——
+  ["der","Bahnhof","火车站","a1"],["der","Bus","公交车","a1"],["das","Fahrrad","自行车","a1"],["der","Flughafen","机场","a1"],["das","Hotel","酒店","a1"],
+  ["das","Wetter","天气","a1"],["der","Regen","雨","a1"],["der","Schnee","雪","a1"],["der","Wind","风","a1"],
+  ["die","Woche","周","a1"],["die","Stunde","小时","a1"],["die","Minute","分钟","a1"],["der","Morgen","早晨","a1"],["der","Abend","晚上","a1"],
+  // —— A1 家人与生活 ——
+  ["die","Familie","家庭","a1"],["der","Vater","父亲","a1"],["die","Mutter","母亲","a1"],["der","Bruder","兄弟","a1"],["die","Schwester","姐妹","a1"],
+  ["der","Sohn","儿子","a1"],["die","Tochter","女儿","a1"],["der","Freund","朋友","a1"],
+  ["das","Handy","手机","a1"],["das","Telefon","电话","a1"],["der","Brief","信","a1"],["der","Name","名字(弱变化)","a1"],
+  ["die","Musik","音乐","a1"],["das","Lied","歌","a1"],["der","Film","电影","a1"],["das","Spiel","游戏","a1"],["der","Sport","运动","a1"],
+  ["das","Restaurant","餐厅","a1"],
+  // —— A2 ——
+  ["die","Möglichkeit","可能性 -keit","a2"],["die","Freundschaft","友谊 -schaft","a2"],
+  ["das","Feuer","火","a2"],["die","Luft","空气","a2"],["die","Erde","大地","a2"],["das","Blatt","叶子","a2"],
+  ["die","Liebe","爱","a2"],["die","Wolke","云","a2"],
+  ["die","Gesundheit","健康 -heit","a2"],["die","Krankheit","疾病 -heit","a2"],["das","Krankenhaus","医院","a2"],["die","Apotheke","药店","a2"],
+  ["der","Termin","预约","a2"],["die","Prüfung","考试 -ung","a2"],["die","Erfahrung","经验 -ung","a2"],["die","Meinung","意见 -ung","a2"],
+  ["die","Nachricht","消息","a2"],["das","Gespräch","对话","a2"],["die","Reise","旅行","a2"],["der","Urlaub","假期","a2"],
+  ["die","Geschichte","历史/故事","a2"],["der","Anfang","开始","a2"],["das","Ende","结束","a2"],
+  ["die","Zukunft","未来","a2"],["die","Rechnung","账单 -ung","a2"],["der","Kunde","顾客(弱变化)","a2"],
+  // —— B1 ——
+  ["die","Freiheit","自由 -heit","b1"],
 ];
 const LANE={der:0,das:1,die:2},ART=["der","das","die"],COL=["#3D6B8E","#4E8A6B","#AE5273"];
-const deck=WORDS.map((w,i)=>({id:i,art:w[0],word:w[1],gloss:w[2],weight:3,streak:0,seen:0,correct:0}));
+const deck=WORDS.map((w,i)=>({id:i,art:w[0],word:w[1],gloss:w[2],lvl:w[3]||"a1",weight:3,streak:0,seen:0,correct:0}));
 let lastId=-1;
 function pick(){const pool=deck.filter(d=>d.id!==lastId);const tw=pool.reduce((s,d)=>s+d.weight,0);
   let r=Math.random()*tw,c=pool[0];for(const d of pool){r-=d.weight;if(r<=0){c=d;break;}}lastId=c.id;return c;}
@@ -258,7 +294,7 @@ const DIFF={
 let diff="slow";
 const FACTOR=[1.5,1.25,1.0,0.82,0.66];
 const mlvl=d=>Math.max(0,Math.min(4,d.streak));
-const winBase=()=>mode==="rush"?2.5-(2.5-1.05)*rushRamp():DIFF[diff].base;   // 冲刺:窗口随里程收紧
+const winBase=()=>mode==="rush"?2.5-(2.5-1.25)*rushRamp():DIFF[diff].base;   // 冲刺:窗口收紧,极速封顶在"快+"而非疯狂
 const winSec=d=>winBase()*FACTOR[mlvl(d)];
 
 const cv=document.getElementById("cv"),ctx=cv.getContext("2d");
@@ -268,10 +304,11 @@ window.addEventListener("resize",resize);
 
 let running=false,last=0,scroll=0,shake=0;
 let dinoX,laneYs,laneGap,groundY;
-let dino={lane:1,y:0,x:0,bonk:0,ring:0,squash:0};   // x:后方=未作答,前方=已作答
+let dino={lane:1,y:0,x:0,bonk:0,ring:0,squash:0};   // x:冲刺作答时短暂前冲
 let gates=[],stats={correct:0,total:0,combo:0,distF:0};
 let tapFx=null,zoneHi=0,zoneHiLane=1,startHint=4.5;   // 点击涟漪 / 区域高亮 / 起始提示
 let parts=[],floats=[],banners=[],freeze=0,comboPop=0; // 粒子 / 飘字 / 里程碑横幅 / 顿帧 / combo徽章弹跳
+let sprint=0;                                          // 冲刺:0→1,世界整体向左抽走的强度(恐龙是镜头锚点,不位移)
 let nextDistIdx=0;const DISTM=[100,250,500,1000,1500,2000,3000,5000,8000];
 const PRAISE=["不错!","厉害!","Sehr gut!","火力全开!","Wahnsinn!","无人能挡!"];
 let T=0,roundOver=false,fever=false;          // 游戏时钟 / 轮结算中 / FEVER状态
@@ -281,13 +318,14 @@ let round=newRound(1);
 let mode="endless",practiceN=30;                      // 模式与练习词数(进游戏前选定)
 const DIFFNAME={slow:"慢",fast:"快",crazy:"疯狂"};
 let rushHp=3;const BESTK="genus_best_v1";             // 冲刺模式:3条命 + 最佳里程
-const rushRamp=()=>Math.min(1,stats.distF/1000);      // 0→1:从慢档线性加速到疯狂档(约1000m)
+const rushRamp=()=>Math.min(1,stats.distF/1500);      // 0→1:加速曲线拉长到1500m
 
-/* 词汇进度持久化(单词记录页的数据来源) */
-const SAVEK="genus_progress_v1";
+/* 词汇进度持久化(单词记录页的数据来源);以"冠词 单词"为键,扩词/重排不丢进度 */
+const SAVEK="genus_progress_v2";
+const wkey=d=>d.art+" "+d.word;
 function loadProg(){try{const s=JSON.parse(localStorage.getItem(SAVEK)||"{}");
-  deck.forEach(d=>{const r=s[d.id];if(r){d.seen=r[0];d.correct=r[1];d.streak=r[2];d.weight=r[3];}});}catch(e){}}
-function saveProg(){try{const s={};deck.forEach(d=>{if(d.seen)s[d.id]=[d.seen,d.correct,d.streak,d.weight];});
+  deck.forEach(d=>{const r=s[wkey(d)];if(r){d.seen=r[0];d.correct=r[1];d.streak=r[2];d.weight=r[3];}});}catch(e){}}
+function saveProg(){try{const s={};deck.forEach(d=>{if(d.seen)s[wkey(d)]=[d.seen,d.correct,d.streak,d.weight];});
   localStorage.setItem(SAVEK,JSON.stringify(s));}catch(e){}}
 loadProg();
 
@@ -296,47 +334,56 @@ function layout(){
   const top=H*0.30,bottom=H*0.86,span=bottom-top;   // 顶部留出词牌中性区,不偏向任何车道
   laneYs=[top,top+span*0.5,top+span];laneGap=span*0.5;
   if(!dino.y)dino.y=laneYs[dino.lane];
-  if(!dino.x)dino.x=dinoX-52;
+  if(!dino.x)dino.x=dinoX;
 }
-const worldSpeed=()=>W*(mode==="rush"?0.34+(0.78-0.34)*rushRamp():DIFF[diff].scroll);
+const worldSpeed=()=>W*(mode==="rush"?0.34+(0.70-0.34)*rushRamp():DIFF[diff].scroll);
 const gateSpeed=d=>(W-dinoX)/winSec(d);
 
 function spawnGate(){const d=pick(),c=LANE[d.art];
   const w=winSec(d);
   gates.push({x:W+24,word:d,spd:gateSpeed(d),correct:c,resolved:false,ok:false,flash:0,
-    born:T,win:w,vis:null,bth:Math.min(0.9,w*0.55),   // vis=单词进入可读区时刻,bth=从那时起的BLITZ窗口
-    bz:false,ans:null,commit:null});}                  // ans=已作答时刻 bz=已锁定 commit=选对车道时刻
-function blitzFx(g){const bx=Math.min(g.x,W-70);       // 锁定瞬间立即反馈,不等词牌到达
+    born:T,win:w,vis:null,bth:Math.min(0.9,w*0.55)});} // vis=单词进入可读区时刻,bth=BLITZ窗口
+function blitzFx(x){const bx=Math.min(x,W-70);
   floatTxt(bx,laneYs[1]-46,"BLITZ!",GOLD,15);burst(bx,laneYs[1]-16,GOLD,9,0.7);
-  tone(1320,1980,.1,"triangle",.12);}
-// 上前作答模型:每个词必须主动点一次(点击=作答,恐龙前冲);词可见前的点击只换道不作答
+  tone(1320,1980,.1,"triangle",.12);
+  if(navigator.vibrate)navigator.vibrate([12,28,20]);}  // 双脉冲打击震动(Android;iOS不支持网页震动)
+// 冲刺作答模型:点对车道=锁定答案并触发冲刺(世界向左抽走,词牌冲到线上撞击结算);
+// 点错=未结算,✗提示,词到线前可改答;不点=恐龙跑到线按当前车道结算
 const setLane=i=>{const n=Math.max(0,Math.min(2,i));
   if(n!==dino.lane){dino.lane=n;dino.squash=1;}
-  const g=nearest();if(g&&g.vis!=null){
-    g.ans=T;
-    g.commit=(dino.lane===g.correct)?T:null;
-    if(g.commit==null)g.bz=false;                      // 改答到错误车道,取消锁定
-    else if(!g.bz&&T<=g.vis+g.bth){g.bz=true;blitzFx(g);}}};
+  const g=nearest();
+  if(g&&g.vis!=null&&!g.resolved&&!g.claimed){
+    if(n===g.correct){
+      g.claimed=true;                                  // 答案锁定,冲刺开始,撞线时结算
+      g.willBlitz=!g.tried&&T<=g.vis+g.bth;
+      if(g.willBlitz)blitzFx(g.x);
+    }else if(!g.tried){g.tried=true;                   // 错误尝试:断combo但不算错词,可改答
+      stats.combo=0;updateHUD();
+      floatTxt(dinoX+22,laneYs[n]-14,"✗","#8C8880",14);
+      tone(230,150,.08,"triangle",.08);}}};
 
 function resolve(g){
-  g.resolved=true;const d=g.word;d.seen++;
-  const right=g.ans!=null&&dino.lane===g.correct;      // 未作答=错,主动回忆是硬要求
+  g.resolved=true;g.spd*=3.5;                          // 已结算的词牌快速退场,避免与新词重叠
+  const d=g.word;d.seen++;
+  const right=g.claimed?true:dino.lane===g.correct;    // 锁定过的答案不受之后换道影响
+  const fx=Math.min(dino.x+14,W-60);                   // 特效落在撞击点(冲刺=词牌处,被动=作答线)
   g.ok=right;g.flash=1;stats.total++;
-  if(right){stats.correct++;stats.combo++;d.correct++;d.streak++;d.weight=Math.max(1,d.weight-1);dino.ring=1;
+  if(right){stats.correct++;stats.combo++;d.correct++;dino.ring=1;
     freeze=0.05;comboPop=1;sfxRight(stats.combo);if(navigator.vibrate)navigator.vibrate(12);
-    burst(dinoX+12,laneYs[g.correct],COL[g.correct],10+Math.min(stats.combo,14));
-    floatTxt(dinoX+30,laneYs[g.correct]-36,"+1",COL[g.correct],13);
-    if(d.streak===4){floatTxt(dinoX,laneYs[g.correct]-58,"★ "+d.word+" 已掌握",COL[1],13);round.newMast++;}
-    // BLITZ:特效已在锁定瞬间播放(setLane/update),此处只计数
-    if(g.bz){round.blitz++;stats.distF+=5;}
+    burst(fx,laneYs[g.correct],COL[g.correct],10+Math.min(stats.combo,14));
+    floatTxt(fx+18,laneYs[g.correct]-36,"+1",COL[g.correct],13);
+    if(!g.tried){                                      // 干净答对才涨掌握度;试错答对不算学会
+      d.streak++;d.weight=Math.max(1,d.weight-1);
+      if(d.streak===4){floatTxt(fx,laneYs[g.correct]-58,"★ "+d.word+" 已掌握",COL[1],13);round.newMast++;}
+      // BLITZ:锁定时已判定(首次出手即正确且在金条窗口内),撞线时入账
+      if(g.claimed&&g.willBlitz){round.blitz++;stats.distF+=5;}}
     if(!fever&&stats.combo>=FEVER_AT){fever=true;showBanner("FEVER ×2","双倍里程 · 保持连击!",FEV);}
     if(stats.combo>=5&&stats.combo%5===0&&stats.combo!==FEVER_AT)
       showBanner("COMBO ×"+stats.combo,PRAISE[Math.min(PRAISE.length-1,stats.combo/5-1)],COL[g.correct]);
     round.right++;round.maxCombo=Math.max(round.maxCombo,stats.combo);
   }else{stats.combo=0;d.streak=0;d.weight=Math.min(9,d.weight+3);dino.bonk=1;shake=1;
     freeze=0.12;sfxWrong();if(navigator.vibrate)navigator.vibrate([40,50,40]);
-    floatTxt(dinoX+30,laneYs[g.correct],ART[g.correct]+"!",COL[g.correct],17);
-    if(g.ans==null)floatTxt(dinoX-20,laneYs[1]-30,"未作答","#8C8880",13);
+    floatTxt(fx+18,laneYs[g.correct],ART[g.correct]+"!",COL[g.correct],17);
     if(fever){fever=false;floatTxt(W*0.5,H*0.42,"FEVER 结束","#8C8880",13);}
     if(mode==="rush"){rushHp--;floatTxt(24+rushHp*20,H-36,"-♥","#AE5273",14);
       if(rushHp<=0){freeze=0.3;setTimeout(endRun,800);}}
@@ -415,7 +462,7 @@ function renderRecords(){
   $("recList").innerHTML=[...deck].sort((a,b)=>mlvl(a)-mlvl(b)||(b.seen-b.correct)-(a.seen-a.correct))
     .map(d=>{const lv=mlvl(d);
       return `<div class="recrow"><b style="color:${COL[LANE[d.art]]}">${d.art} ${d.word}</b>`+
-        `<span class="g">${d.gloss}</span>`+
+        `<span class="g">${d.gloss}</span><span class="lv">${d.lvl.toUpperCase()}</span>`+
         `<span class="m">${[0,1,2,3].map(k=>`<i class="${k<lv?"f":""}"></i>`).join("")}</span>`+
         `<span class="pc">${d.seen?Math.round(d.correct/d.seen*100)+"%":"—"}</span></div>`;}).join("");
 }
@@ -446,18 +493,25 @@ function showBanner(txt,sub,c){banners.push({txt,sub,c,t:0});sfxMile();
 function update(dt){
   if(freeze>0){freeze=Math.max(0,freeze-dt);dt*=0.18;}   // 顿帧:命中瞬间世界短暂减速
   T+=dt;
-  const ws=worldSpeed();scroll=(scroll+ws*dt)%44;stats.distF+=ws*dt*0.10*(fever?2:1);
+  // 冲刺:锁定后恐龙冲向词牌,接触瞬间撞击结算,然后迅速退回;sprint驱动前倾/速度线/背景加速
+  const claiming=gates.some(g=>!g.resolved&&g.claimed);
+  sprint+=((claiming?1:0)-sprint)*Math.min(1,dt*(claiming?16:8));
+  const M=1+sprint*5;
+  const ws=worldSpeed()*M;scroll=(scroll+ws*dt)%44;stats.distF+=ws*dt*0.10*(fever?2:1);
   if(fever&&Math.random()<dt*16)parts.push({x:dinoX-16,y:dino.y-12+(Math.random()-.5)*22,
     vx:-90-Math.random()*70,vy:(Math.random()-.5)*50,t:.7,c:Math.random()<.5?FEV:GOLD,r:2+Math.random()*2});
   if(nextDistIdx<DISTM.length&&stats.distF>=DISTM[nextDistIdx]){
     showBanner(DISTM[nextDistIdx]+" METER","里程碑达成",COL[0]);nextDistIdx++;}
-  for(const g of gates){g.x-=g.spd*dt;
+  // 已结算词牌借冲刺加速快速退场;未锁定的新词永远按正常速度来,反应窗口不被偷走
+  for(const g of gates){g.x-=g.spd*dt*(g.resolved?M:1);
     if(!g.resolved&&g.vis==null&&g.x<W-56)g.vis=T;   // 单词滑入可读区,BLITZ计时从此刻起
     if(!g.resolved&&g.x<=dinoX)resolve(g);if(g.flash>0)g.flash=Math.max(0,g.flash-dt*1.5);}
+  const cg=gates.find(g=>g.claimed&&!g.resolved);
+  if(cg){dino.x+=(cg.x-10-dino.x)*Math.min(1,dt*15);   // 冲向词牌
+    if(cg.x-dino.x<18)resolve(cg);}                    // 接触=撞击结算
   gates=gates.filter(g=>g.x>-280);
   dino.y+=(laneYs[dino.lane]-dino.y)*Math.min(1,dt*14);
-  const ng=nearest();                                  // 作答后前冲,新词出现退回后方
-  dino.x+=(((ng&&ng.ans!=null)?dinoX:dinoX-52)-dino.x)*Math.min(1,dt*11);
+  if(!cg)dino.x+=(dinoX-dino.x)*Math.min(1,dt*10);   // 撞击后迅速退回原位
   if(dino.bonk>0)dino.bonk=Math.max(0,dino.bonk-dt*2.2);
   if(dino.ring>0)dino.ring=Math.max(0,dino.ring-dt*2.2);
   if(shake>0)shake=Math.max(0,shake-dt*3);
@@ -501,7 +555,7 @@ function draw(){
   }
   ctx.textBaseline="alphabetic";
 
-  // 作答线(词牌越过此线仍未作答=错)
+  // 作答线(词牌到此仍未被冲刺,按恐龙当前车道结算)
   ctx.strokeStyle=hex("#211E1A",0.1);ctx.lineWidth=1.5;ctx.setLineDash([4,7]);
   ctx.beginPath();ctx.moveTo(dinoX+14,laneYs[0]-laneGap*0.42);ctx.lineTo(dinoX+14,laneYs[2]+laneGap*0.42);ctx.stroke();
   ctx.setLineDash([]);
@@ -527,11 +581,9 @@ function draw(){
       ctx.fillText(d.art,x,wy+ph/2+17);}
     ctx.font=`600 21px ${DF}`;ctx.fillStyle="#211E1A";ctx.textAlign="center";ctx.fillText(d.word,x,wy);
     ctx.font=`11px ${CNF}`;ctx.fillStyle=hex("#211E1A",0.55);ctx.fillText(d.gloss,x,wy+18);
-    // BLITZ窗口:金色流逝条;锁定后变满条常亮
-    if(!g.resolved&&g.vis!=null){
-      if(g.bz){ctx.fillStyle=GOLD;rr(x-pw/2+8,wy+ph/2-5,pw-16,2.5,1.25);ctx.fill();}
-      else{const lf=(g.vis+g.bth-T)/g.bth;
-        if(lf>0){ctx.fillStyle=hex(GOLD,0.9);rr(x-pw/2+8,wy+ph/2-5,(pw-16)*lf,2.5,1.25);ctx.fill();}}}
+    // BLITZ窗口:金色流逝条(窗口内主动冲刺=BLITZ)
+    if(!g.resolved&&g.vis!=null){const lf=(g.vis+g.bth-T)/g.bth;
+      if(lf>0){ctx.fillStyle=hex(GOLD,0.9);rr(x-pw/2+8,wy+ph/2-5,(pw-16)*lf,2.5,1.25);ctx.fill();}}
   }
 
   // 恐龙 + 影子
@@ -548,8 +600,11 @@ function draw(){
     ctx.fillStyle="#FBFAF5";ctx.textAlign="center";ctx.fillText(ct,0,4);ctx.restore();}
   // 角色:纸面填充+墨线描边,与UI卡片同一设计语言;连击时系车道色围巾
   const INK="#211E1A",PAPER="#FBFAF5";
+  if(sprint>0.12){ctx.strokeStyle=hex("#211E1A",0.25*sprint);ctx.lineWidth=2;   // 冲刺速度线
+    for(let s=0;s<4;s++){const oy=-34+s*9;ctx.beginPath();
+      ctx.moveTo(dx-26,dy+oy);ctx.lineTo(dx-26-22*sprint,dy+oy);ctx.stroke();}}
   ctx.save();ctx.translate(dx,dy-bob);ctx.scale(1+0.15*dino.squash,1-0.18*dino.squash);
-  ctx.rotate(dino.bonk>0?-0.28*dino.bonk:0.03*lp);   // 答错后仰 / 奔跑轻摆
+  ctx.rotate(dino.bonk>0?-0.28*dino.bonk:0.03*lp+0.12*sprint);   // 答错后仰 / 奔跑轻摆 / 冲刺前倾
   ctx.lineJoin="round";ctx.lineCap="round";
   // 双腿(屈膝交替,摆动腿抬脚)
   ctx.strokeStyle=INK;ctx.lineWidth=2.6;
@@ -682,7 +737,7 @@ function begin(){
   gates.length=0;parts.length=0;floats.length=0;banners.length=0;
   stats={correct:0,total:0,combo:0,distF:0};round=newRound(1);
   nextDistIdx=0;fever=false;freeze=0;roundOver=false;tapFx=null;
-  dino.lane=1;dino.y=laneYs[1];dino.x=dinoX-52;startHint=3.5;rushHp=3;
+  dino.lane=1;dino.y=laneYs[1];dino.x=dinoX;sprint=0;startHint=3.5;rushHp=3;
   spawnGate();running=true;paused=false;last=performance.now();requestAnimationFrame(loop);
 }
 let paused=false;
