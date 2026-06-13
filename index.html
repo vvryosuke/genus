@@ -491,7 +491,12 @@ function initMedia(a){if(mediaTried)return;mediaTried=true;
   }catch(e){msDest=null;}}
 const out=()=>msDest||AC.destination;
 function sfx(fn){try{if(!AC)AC=new(window.AudioContext||window.webkitAudioContext)();
-  if(AC.state==="suspended")AC.resume();initMedia(AC);fn(AC);}catch(e){}}
+  if(AC.state==="suspended")AC.resume();initMedia(AC);
+  if(mediaEl&&mediaEl.paused)mediaEl.play().catch(()=>{});   // 切后台回来媒体流被暂停,出声时兜底重播
+  fn(AC);}catch(e){}}
+document.addEventListener("visibilitychange",()=>{   // 切回前台:恢复AudioContext+重播媒体流(否则只剩朗读没音乐)
+  if(!document.hidden&&AC){if(AC.state==="suspended")AC.resume();
+    if(mediaEl&&mediaEl.paused)mediaEl.play().catch(()=>{});}});
 function tone(f0,f1,dur,type,vol,when=0){sfx(a=>{const o=a.createOscillator(),g=a.createGain(),t=a.currentTime+when;
   o.type=type;o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(Math.max(30,f1),t+dur);
   g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.001,t+dur);
@@ -528,7 +533,7 @@ function mSchedule(){if(!running||paused||!musicOn||!AC||!mg)return;
     mNext+=spb;mStep++;}}
 function musicStart(){if(!musicOn)return;sfx(a=>{
   if(!mg){mg=a.createGain();mg.gain.value=0;mg.connect(out());}
-  mg.gain.cancelScheduledValues(a.currentTime);mg.gain.setTargetAtTime(0.7,a.currentTime,0.5);
+  mg.gain.cancelScheduledValues(a.currentTime);mg.gain.setTargetAtTime(1.6,a.currentTime,0.5);
   mNext=Math.max(mNext,a.currentTime+0.05);
   if(!mTimer)mTimer=setInterval(mSchedule,90);});}
 function musicStop(){if(mg&&AC){mg.gain.cancelScheduledValues(AC.currentTime);
@@ -537,8 +542,8 @@ function musicStop(){if(mg&&AC){mg.gain.cancelScheduledValues(AC.currentTime);
 function musicDuck(){if(mg&&AC&&musicOn&&mTimer){   // 朗读时轻压+快恢复(冲刺模式读得密,不能压太狠太久)
   mg.gain.cancelScheduledValues(AC.currentTime);
   mg.gain.setValueAtTime(mg.gain.value,AC.currentTime);
-  mg.gain.linearRampToValueAtTime(0.68,AC.currentTime+0.06);
-  mg.gain.setTargetAtTime(0.7,AC.currentTime+0.4,0.3);}}
+  mg.gain.linearRampToValueAtTime(1.6,AC.currentTime+0.06);
+  mg.gain.setTargetAtTime(1.6,AC.currentTime+0.4,0.3);}}
 
 const sfxRight=c=>{const f=520*Math.pow(2,Math.min(c,12)/12);tone(f,f*1.5,.11,"triangle",.14);};
 const sfxWrong=()=>tone(170,60,.22,"sawtooth",.15);
