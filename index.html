@@ -477,22 +477,30 @@ function renderRecords(){
 }
 function speak(d){if(!("speechSynthesis"in window))return;
   musicDuck();
-  const u=new SpeechSynthesisUtterance(d.art+" "+d.word);u.lang="de-DE";u.rate=.92;u.volume=0.75;
+  const u=new SpeechSynthesisUtterance(d.art+" "+d.word);u.lang="de-DE";u.rate=.92;u.volume=0.6;
   const v=speechSynthesis.getVoices().find(v=>v.lang.startsWith("de"));if(v)u.voice=v;
   speechSynthesis.cancel();speechSynthesis.speak(u);}
 
 /* 音效:答对音高随combo上升,答错低沉,里程碑小号角 */
-let AC=null;
+let AC=null,msDest=null,mediaEl=null,mediaTried=false;
+// 路由经 MediaStream+<audio> 播放,绕过 iOS 静音开关(WebAudio直连destination会被静音)
+function initMedia(a){if(mediaTried)return;mediaTried=true;
+  try{msDest=a.createMediaStreamDestination();mediaEl=new Audio();
+    mediaEl.srcObject=msDest.stream;mediaEl.setAttribute("playsinline","");
+    mediaEl.loop=true;const p=mediaEl.play();if(p&&p.catch)p.catch(()=>{});
+  }catch(e){msDest=null;}}
+const out=()=>msDest||AC.destination;
 function sfx(fn){try{if(!AC)AC=new(window.AudioContext||window.webkitAudioContext)();
-  if(AC.state==="suspended")AC.resume();fn(AC);}catch(e){}}
+  if(AC.state==="suspended")AC.resume();initMedia(AC);fn(AC);}catch(e){}}
 function tone(f0,f1,dur,type,vol,when=0){sfx(a=>{const o=a.createOscillator(),g=a.createGain(),t=a.currentTime+when;
   o.type=type;o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(Math.max(30,f1),t+dur);
   g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.001,t+dur);
-  o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+dur+.02);});}
+  o.connect(g);g.connect(out());o.start(t);o.stop(t+dur+.02);});}
 /* ===== 程序化BGM:极简脉冲层 · 冲刺时BPM爬升 · FEVER变亮 · 朗读自动闪避 ===== */
 let musicOn=localStorage.getItem("genus_music")!=="off";
 let mg=null,mTimer=null,mStep=0,mNext=0;
-const MROOTS=[110,87.31,130.81,98];   // Am F C G 低音根音循环
+const MROOTS=[130.81,98,110,87.31];   // C G Am F 欢快流行进行(I-V-vi-IV)
+const MARP=[[4,5,6],[4,5,6],[4,4.757,6],[4,5,6]]; // 各小节琶音(泛音比例:C/G/F大三,Am小三)
 function mTone(f,t,dur,type,vol,slide){const o=AC.createOscillator(),g=AC.createGain();
   o.type=type;o.frequency.setValueAtTime(f,t);if(slide)o.frequency.exponentialRampToValueAtTime(slide,t+dur);
   g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.0008,t+dur);
@@ -504,22 +512,25 @@ function mPad(f,t,dur,vol){const o=AC.createOscillator(),o2=AC.createOscillator(
   o.connect(g);o2.connect(g);g.connect(mg);
   o.start(t);o2.start(t);o.stop(t+dur+.05);o2.stop(t+dur+.05);}
 function mSchedule(){if(!running||paused||!musicOn||!AC||!mg)return;
-  const bpm=(mode==="rush"?96+40*rushRamp():96)+(fever?12:0);
+  const bpm=(mode==="rush"?112+44*rushRamp():112)+(fever?14:0);
   const spb=60/bpm/4;   // 16分音符步长
-  const T3=[1.2,1.25,1.25,1.25];   // 每小节三度音程(Am小三度,F/C/G大三度)
   while(mNext<AC.currentTime+0.25){
-    const s=mStep%16,bar=(mStep>>4)%4,root=MROOTS[bar];
-    if(s===0||s===8)mTone(root,mNext,0.18,"sine",0.16,root*0.5);        // 软低音脉冲
-    if(s===4||s===12)mTone(5200,mNext,0.03,"square",0.011);             // 嘀嗒
-    if(s===0||s===6||s===14)mTone(root,mNext,0.22,"triangle",0.07);     // 低音线
-    if(s===0){mPad(root*2,mNext,spb*16,0.034);mPad(root*3,mNext,spb*16,0.02);} // 垫底和声层
-    if(s===7)mTone(root*2*T3[bar],mNext,0.18,"triangle",0.042);         // 轻拨弦(三度)
-    if(s===15)mTone(root*3,mNext,0.18,"triangle",0.034);                // 轻拨弦(五度)
-    if(s===2&&bar%2===0)mTone(root*(fever?5:4),mNext,0.5,"sine",0.028); // 高音点缀
-    if(fever&&s===10)mTone(root*6,mNext,0.3,"sine",0.022);              // FEVER加花
+    const s=mStep%16,bar=(mStep>>4)%4,root=MROOTS[bar],arp=MARP[bar];
+    // 跳动低音(每拍弹一下)
+    if(s%4===0)mTone(root,mNext,0.16,"sine",0.15,root*0.99);
+    if(s===6||s===14)mTone(root*1.5,mNext,0.12,"triangle",0.06);        // 五度低音回跳
+    // hi-hat 律动(反拍;快板/FEVER再加密)
+    if(s%4===2)mTone(6200,mNext,0.025,"square",0.013);
+    if(s%2===1&&(mode==="rush"||fever))mTone(7800,mNext,0.014,"square",0.006);
+    // 明亮大调琶音旋律(上行跳音)
+    let mr=0;
+    if(s===0)mr=arp[0];else if(s===3)mr=arp[1];else if(s===6)mr=arp[2];
+    else if(s===8)mr=arp[0]*2;else if(s===11)mr=arp[2];else if(s===14)mr=arp[1];
+    if(mr)mTone(root*mr,mNext,0.16,"triangle",0.052);
+    if(fever&&s===12)mTone(root*arp[2]*2,mNext,0.24,"sine",0.02);       // FEVER高音加花
     mNext+=spb;mStep++;}}
 function musicStart(){if(!musicOn)return;sfx(a=>{
-  if(!mg){mg=a.createGain();mg.gain.value=0;mg.connect(a.destination);}
+  if(!mg){mg=a.createGain();mg.gain.value=0;mg.connect(out());}
   mg.gain.cancelScheduledValues(a.currentTime);mg.gain.setTargetAtTime(1.15,a.currentTime,0.5);
   mNext=Math.max(mNext,a.currentTime+0.05);
   if(!mTimer)mTimer=setInterval(mSchedule,90);});}
