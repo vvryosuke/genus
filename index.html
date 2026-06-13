@@ -815,6 +815,7 @@ function setPause(p){
 document.getElementById("pauseBtn").addEventListener("click",()=>{if(running)setPause(!paused);});
 document.getElementById("resumeBtn").addEventListener("click",()=>setPause(false));
 document.getElementById("startBtn").addEventListener("click",()=>{
+  sfx(()=>{});  // 必须在手势同步栈内解锁AudioContext(iOS:放进下面的Promise.then回调会失效→音乐/音效全哑)
   if(document.fonts&&document.fonts.load){
     Promise.all([document.fonts.load('700 22px "Space Grotesk"'),document.fonts.load('600 22px "Space Grotesk"')]).then(begin).catch(begin);
   }else begin();
