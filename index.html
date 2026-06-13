@@ -45,6 +45,7 @@
   .pausemask .t{font-family:var(--disp);font-weight:600;font-size:1.1rem;letter-spacing:.06em;color:var(--ink2);}
   .pausemask button{font-family:var(--disp);font-weight:600;border:none;background:var(--ink);color:#fff;
     font-size:.95rem;padding:13px 36px;border-radius:999px;cursor:pointer;}
+  .pausemask button.backlink{background:none;border:none;color:var(--ink2);font-size:.8rem;padding:0;font-family:var(--cn);font-weight:400;}
 
   /* 游戏视口 */
   .screen{position:relative;flex:1;min-height:300px;border:1px solid var(--line);border-radius:20px;
@@ -170,7 +171,7 @@ unicode-range:U+0100-02AF,U+0304,U+0308,U+0329,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+
   </header>
 
   <div class="screen"><canvas id="cv"></canvas>
-    <div class="pausemask" id="pausemask"><div class="t">已暂停</div><button id="resumeBtn">继续</button><button id="homeBtn">回主页</button></div>
+    <div class="pausemask" id="pausemask"><div class="t">已暂停</div><button id="resumeBtn">继续</button><button id="homeBtn">回主页</button><button class="backlink" id="musBtn2">♫ 音乐:开</button></div>
   </div>
 
   <div class="bar">
@@ -194,6 +195,7 @@ unicode-range:U+0100-02AF,U+0304,U+0308,U+0329,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+
       <button id="mPractice">练习模式<span class="de">training</span></button>
       <button id="mRecords">单词记录<span class="de">wörter</span></button>
     </div>
+    <button class="backlink" id="musBtn">♫ 音乐:开</button>
   </div>
 
   <div class="overlay" id="setupview" style="display:none">
@@ -399,7 +401,7 @@ function resolve(g){
 }
 
 function sumShow(title,cells,againLabel){
-  roundOver=true;paused=true;sfxMile();
+  roundOver=true;paused=true;musicStop();sfxMile();
   document.getElementById("sumTitle").textContent=title;
   document.getElementById("sumGrid").innerHTML=cells.map(c=>
     `<div class="scell"><div class="n ${c[2]||""}">${c[0]}</div><div class="l">${c[1]}</div></div>`).join("");
@@ -433,7 +435,7 @@ function endRun(){
 const $=id=>document.getElementById(id);
 const VIEWS=["homeview","setupview","recview","sumview"];
 const show=id=>VIEWS.forEach(v=>$(v).style.display=(v===id?"flex":"none"));
-function goHome(){running=false;paused=false;roundOver=false;
+function goHome(){running=false;paused=false;roundOver=false;musicStop();
   $("pausemask").classList.remove("show");$("pauseBtn").textContent="❙❙";
   if("speechSynthesis"in window)speechSynthesis.cancel();
   show("homeview");}
@@ -454,6 +456,11 @@ $("sumHomeBtn").addEventListener("click",goHome);
 $("homeBtn").addEventListener("click",goHome);
 $("wipeBtn").addEventListener("click",()=>{localStorage.removeItem(SAVEK);
   deck.forEach(d=>{d.seen=0;d.correct=0;d.streak=0;d.weight=3;});renderRecords();});
+function musLabel(){const t="♫ 音乐:"+(musicOn?"开":"关");$("musBtn").textContent=t;$("musBtn2").textContent=t;}
+function musToggle(){musicOn=!musicOn;try{localStorage.setItem("genus_music",musicOn?"on":"off");}catch(e){}
+  musLabel();if(!musicOn)musicStop();else if(running&&!paused)musicStart();}
+$("musBtn").addEventListener("click",musToggle);
+$("musBtn2").addEventListener("click",musToggle);
 
 /* 单词记录:未掌握在前,显示掌握度与正确率 */
 function renderRecords(){
@@ -469,7 +476,8 @@ function renderRecords(){
         `<span class="pc">${d.seen?Math.round(d.correct/d.seen*100)+"%":"—"}</span></div>`;}).join("");
 }
 function speak(d){if(!("speechSynthesis"in window))return;
-  const u=new SpeechSynthesisUtterance(d.art+" "+d.word);u.lang="de-DE";u.rate=.92;
+  musicDuck();
+  const u=new SpeechSynthesisUtterance(d.art+" "+d.word);u.lang="de-DE";u.rate=.92;u.volume=0.75;
   const v=speechSynthesis.getVoices().find(v=>v.lang.startsWith("de"));if(v)u.voice=v;
   speechSynthesis.cancel();speechSynthesis.speak(u);}
 
@@ -481,6 +489,49 @@ function tone(f0,f1,dur,type,vol,when=0){sfx(a=>{const o=a.createOscillator(),g=
   o.type=type;o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(Math.max(30,f1),t+dur);
   g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.001,t+dur);
   o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+dur+.02);});}
+/* ===== 程序化BGM:极简脉冲层 · 冲刺时BPM爬升 · FEVER变亮 · 朗读自动闪避 ===== */
+let musicOn=localStorage.getItem("genus_music")!=="off";
+let mg=null,mTimer=null,mStep=0,mNext=0;
+const MROOTS=[110,87.31,130.81,98];   // Am F C G 低音根音循环
+function mTone(f,t,dur,type,vol,slide){const o=AC.createOscillator(),g=AC.createGain();
+  o.type=type;o.frequency.setValueAtTime(f,t);if(slide)o.frequency.exponentialRampToValueAtTime(slide,t+dur);
+  g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.0008,t+dur);
+  o.connect(g);g.connect(mg);o.start(t);o.stop(t+dur+.02);}
+function mPad(f,t,dur,vol){const o=AC.createOscillator(),o2=AC.createOscillator(),g=AC.createGain();
+  o.type="sine";o.frequency.value=f;o2.type="sine";o2.frequency.value=f*1.006;   // 轻微失谐=暖度
+  g.gain.setValueAtTime(0.0008,t);g.gain.linearRampToValueAtTime(vol,t+dur*0.35);
+  g.gain.setTargetAtTime(0.0008,t+dur*0.72,dur*0.12);
+  o.connect(g);o2.connect(g);g.connect(mg);
+  o.start(t);o2.start(t);o.stop(t+dur+.05);o2.stop(t+dur+.05);}
+function mSchedule(){if(!running||paused||!musicOn||!AC||!mg)return;
+  const bpm=(mode==="rush"?96+40*rushRamp():96)+(fever?12:0);
+  const spb=60/bpm/4;   // 16分音符步长
+  const T3=[1.2,1.25,1.25,1.25];   // 每小节三度音程(Am小三度,F/C/G大三度)
+  while(mNext<AC.currentTime+0.25){
+    const s=mStep%16,bar=(mStep>>4)%4,root=MROOTS[bar];
+    if(s===0||s===8)mTone(root,mNext,0.18,"sine",0.16,root*0.5);        // 软低音脉冲
+    if(s===4||s===12)mTone(5200,mNext,0.03,"square",0.011);             // 嘀嗒
+    if(s===0||s===6||s===14)mTone(root,mNext,0.22,"triangle",0.07);     // 低音线
+    if(s===0){mPad(root*2,mNext,spb*16,0.034);mPad(root*3,mNext,spb*16,0.02);} // 垫底和声层
+    if(s===7)mTone(root*2*T3[bar],mNext,0.18,"triangle",0.042);         // 轻拨弦(三度)
+    if(s===15)mTone(root*3,mNext,0.18,"triangle",0.034);                // 轻拨弦(五度)
+    if(s===2&&bar%2===0)mTone(root*(fever?5:4),mNext,0.5,"sine",0.028); // 高音点缀
+    if(fever&&s===10)mTone(root*6,mNext,0.3,"sine",0.022);              // FEVER加花
+    mNext+=spb;mStep++;}}
+function musicStart(){if(!musicOn)return;sfx(a=>{
+  if(!mg){mg=a.createGain();mg.gain.value=0;mg.connect(a.destination);}
+  mg.gain.cancelScheduledValues(a.currentTime);mg.gain.setTargetAtTime(1.15,a.currentTime,0.5);
+  mNext=Math.max(mNext,a.currentTime+0.05);
+  if(!mTimer)mTimer=setInterval(mSchedule,90);});}
+function musicStop(){if(mg&&AC){mg.gain.cancelScheduledValues(AC.currentTime);
+  mg.gain.setTargetAtTime(0,AC.currentTime,0.3);}
+  if(mTimer){clearInterval(mTimer);mTimer=null;}}
+function musicDuck(){if(mg&&AC&&musicOn&&mTimer){   // 朗读时压低,读完恢复
+  mg.gain.cancelScheduledValues(AC.currentTime);
+  mg.gain.setValueAtTime(mg.gain.value,AC.currentTime);
+  mg.gain.linearRampToValueAtTime(0.25,AC.currentTime+0.08);
+  mg.gain.setTargetAtTime(1.15,AC.currentTime+1.0,0.35);}}
+
 const sfxRight=c=>{const f=520*Math.pow(2,Math.min(c,12)/12);tone(f,f*1.5,.11,"triangle",.14);};
 const sfxWrong=()=>tone(170,60,.22,"sawtooth",.15);
 const sfxMile=()=>[0,4,7,12].forEach((s,i)=>{const f=660*Math.pow(2,s/12);tone(f,f,.13,"triangle",.11,i*.07);});
@@ -749,6 +800,7 @@ function begin(){
   nextDistIdx=0;fever=false;freeze=0;roundOver=false;tapFx=null;spawnDelay=0;
   dino.lane=1;dino.y=laneYs[1];dino.x=dinoX;sprint=0;startHint=3.5;rushHp=3;
   spawnGate();running=true;paused=false;last=performance.now();requestAnimationFrame(loop);
+  musicStart();
 }
 let paused=false;
 function setPause(p){
@@ -757,6 +809,7 @@ function setPause(p){
   paused=p;
   document.getElementById("pausemask").classList.toggle("show",p);
   document.getElementById("pauseBtn").textContent=p?"▶":"❙❙";
+  if(p)musicStop();else musicStart();
   if(!p){last=performance.now();requestAnimationFrame(loop);}  // 恢复:重置时间避免跳帧
 }
 document.getElementById("pauseBtn").addEventListener("click",()=>{if(running)setPause(!paused);});
@@ -767,6 +820,7 @@ document.getElementById("startBtn").addEventListener("click",()=>{
   }else begin();
 });
 if("speechSynthesis"in window){speechSynthesis.getVoices();speechSynthesis.onvoiceschanged=()=>{};}
+musLabel();
 resize();
 </script>
 </body>
