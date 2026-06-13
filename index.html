@@ -477,7 +477,7 @@ function renderRecords(){
 }
 function speak(d){if(!("speechSynthesis"in window))return;
   musicDuck();
-  const u=new SpeechSynthesisUtterance(d.art+" "+d.word);u.lang="de-DE";u.rate=.92;u.volume=0.45;
+  const u=new SpeechSynthesisUtterance(d.art+" "+d.word);u.lang="de-DE";u.rate=.92;u.volume=0.35;
   const v=speechSynthesis.getVoices().find(v=>v.lang.startsWith("de"));if(v)u.voice=v;
   speechSynthesis.cancel();speechSynthesis.speak(u);}
 
@@ -591,7 +591,7 @@ function update(dt){
   floats=floats.filter(f=>f.t>0);
   if(banners.length){banners[0].t+=dt;if(banners[0].t>1.7)banners.shift();}
 }
-const nearest=()=>{let b=null,bx=1e9;for(const g of gates){if(!g.resolved&&g.x<bx){bx=g.x;b=g;}}return b;};
+const nearest=()=>{let b=null,bx=1e9;for(const g of gates){if(!g.resolved&&!g.claimed&&g.x<bx){bx=g.x;b=g;}}return b;};   // 跳过已锁定冲刺中的词,点击作用于真正待答的下一个
 const DF='"Space Grotesk",sans-serif';
 const CNF='-apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
 // 词牌上只显示干净释义:剥离 ·阳性! / -ung / (弱变化) 等会泄露词性的标注(复习页保留)
