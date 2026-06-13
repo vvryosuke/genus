@@ -477,7 +477,7 @@ function renderRecords(){
 }
 function speak(d){if(!("speechSynthesis"in window))return;
   musicDuck();
-  const u=new SpeechSynthesisUtterance(d.art+" "+d.word);u.lang="de-DE";u.rate=.92;u.volume=0.85;
+  const u=new SpeechSynthesisUtterance(d.art+" "+d.word);u.lang="de-DE";u.rate=.92;u.volume=0.6;
   const v=speechSynthesis.getVoices().find(v=>v.lang.startsWith("de"));if(v)u.voice=v;
   speechSynthesis.cancel();speechSynthesis.speak(u);}
 
@@ -537,7 +537,7 @@ function musicStop(){if(mg&&AC){mg.gain.cancelScheduledValues(AC.currentTime);
 function musicDuck(){if(mg&&AC&&musicOn&&mTimer){   // 朗读时轻压+快恢复(冲刺模式读得密,不能压太狠太久)
   mg.gain.cancelScheduledValues(AC.currentTime);
   mg.gain.setValueAtTime(mg.gain.value,AC.currentTime);
-  mg.gain.linearRampToValueAtTime(0.4,AC.currentTime+0.06);
+  mg.gain.linearRampToValueAtTime(0.68,AC.currentTime+0.06);
   mg.gain.setTargetAtTime(0.7,AC.currentTime+0.4,0.3);}}
 
 const sfxRight=c=>{const f=520*Math.pow(2,Math.min(c,12)/12);tone(f,f*1.5,.11,"triangle",.14);};
